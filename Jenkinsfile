@@ -17,6 +17,8 @@ pipeline {
 
   environment {
     AWS_REGION = 'us-east-1'
+    TERRAFORM_VERSION = '1.10.5'
+    PATH+TOOLS = "${WORKSPACE}/.tools"
     CLUSTER_NAME = 'admission-eks'
     ECR_REPOSITORY = 'admission-api'
     IMAGE_NAME = 'admission-api'
@@ -31,6 +33,34 @@ pipeline {
   stages {
     stage('Checkout') {
       steps { checkout scm }
+    }
+
+    stage('Prepare Terraform') {
+      steps {
+        sh '''
+          set -eu
+          mkdir -p "$WORKSPACE/.tools"
+          if ! command -v terraform >/dev/null 2>&1; then
+            python3 - "$WORKSPACE/.tools" "$TERRAFORM_VERSION" <<'PY'
+import sys
+import urllib.request
+import zipfile
+from pathlib import Path
+
+tools_dir = Path(sys.argv[1])
+version = sys.argv[2]
+archive = tools_dir / "terraform.zip"
+url = f"https://releases.hashicorp.com/terraform/{version}/terraform_{version}_linux_amd64.zip"
+urllib.request.urlretrieve(url, archive)
+with zipfile.ZipFile(archive) as bundle:
+    bundle.extract("terraform", tools_dir)
+archive.unlink()
+(tools_dir / "terraform").chmod(0o755)
+PY
+          fi
+          terraform version
+        '''
+      }
     }
 
     stage('Install Dependencies') {
