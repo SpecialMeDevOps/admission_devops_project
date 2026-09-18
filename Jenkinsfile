@@ -42,7 +42,7 @@ pipeline {
 
     stage('Test') {
       when { expression { params.ACTION == 'APPLY' } }
-      steps { sh '. .venv/bin/activate && pytest -q' }
+      steps { sh '. .venv/bin/activate && PYTHONPATH="$WORKSPACE" pytest -q' }
     }
 
     stage('Docker Build') {
