@@ -128,7 +128,7 @@ kubectl -n production get pods
 
 ## 9. Jenkins setup
 
-Install Jenkins with these plugins: Pipeline, Git, Credentials Binding, AWS Credentials, Docker Pipeline, and Kubernetes CLI support. The Jenkins agent needs Docker, AWS CLI, kubectl, Python 3, internet access, and permission to run Docker. The `Prepare Terraform` stage uses an existing Terraform binary when available; otherwise it downloads the pinned Terraform version into the workspace `.tools` directory, so Terraform does not need to be installed globally on the agent.
+Install Jenkins with these plugins: Pipeline, Git, Credentials Binding, AWS Credentials, Docker Pipeline, and Kubernetes CLI support. The Jenkins agent needs Docker, Python 3, internet access, and permission to run Docker. The pipeline reuses AWS CLI, kubectl, and Terraform when installed; otherwise the preparation stages download pinned Linux binaries into the workspace `.tools` directory. AWS credentials and EKS permissions are still required even when the tools are downloaded automatically.
 
 Create these credentials in Jenkins:
 

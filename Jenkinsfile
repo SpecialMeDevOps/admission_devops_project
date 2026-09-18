@@ -18,6 +18,8 @@ pipeline {
   environment {
     AWS_REGION = 'us-east-1'
     TERRAFORM_VERSION = '1.10.5'
+    AWS_CLI_VERSION = '2.22.35'
+    KUBECTL_VERSION = '1.31.4'
     CLUSTER_NAME = 'admission-eks'
     ECR_REPOSITORY = 'admission-api'
     IMAGE_NAME = 'admission-api'
@@ -64,6 +66,66 @@ PY
       }
     }
 
+    stage('Prepare Cloud Tools') {
+      steps {
+        sh '''
+          set -eu
+          mkdir -p "$WORKSPACE/.tools"
+
+          if command -v aws >/dev/null 2>&1; then
+            ln -sf "$(command -v aws)" "$WORKSPACE/.tools/aws"
+          else
+            python3 - "$WORKSPACE/.tools" "$AWS_CLI_VERSION" <<'PY'
+import sys
+import shutil
+import urllib.request
+import zipfile
+from pathlib import Path
+
+tools_dir = Path(sys.argv[1])
+version = sys.argv[2]
+archive = tools_dir / "awscliv2.zip"
+install_dir = tools_dir / "aws-cli"
+archive_dir = tools_dir / "aws-cli-archive"
+url = f"https://awscli.amazonaws.com/awscli-exe-linux-x86_64-{version}.zip"
+urllib.request.urlretrieve(url, archive)
+shutil.rmtree(archive_dir, ignore_errors=True)
+shutil.rmtree(install_dir, ignore_errors=True)
+with zipfile.ZipFile(archive) as bundle:
+  bundle.extractall(archive_dir)
+archive.unlink()
+archive_root = tools_dir / "aws-cli-archive" / "aws"
+archive_root.rename(install_dir)
+(tools_dir / "aws").unlink(missing_ok=True)
+(tools_dir / "aws").symlink_to(install_dir / "dist" / "aws")
+PY
+          fi
+
+          if command -v kubectl >/dev/null 2>&1; then
+            ln -sf "$(command -v kubectl)" "$WORKSPACE/.tools/kubectl"
+          else
+            python3 - "$WORKSPACE/.tools" "$KUBECTL_VERSION" <<'PY'
+import sys
+import urllib.request
+from pathlib import Path
+
+tools_dir = Path(sys.argv[1])
+version = sys.argv[2]
+target = tools_dir / "kubectl"
+urllib.request.urlretrieve(
+    f"https://dl.k8s.io/release/v{version}/bin/linux/amd64/kubectl",
+    target,
+)
+target.chmod(0o755)
+PY
+          fi
+
+          "$WORKSPACE/.tools/aws" --version
+          "$WORKSPACE/.tools/kubectl" version --client
+        '''
+      }
+    }
+
     stage('Install Dependencies') {
       when { expression { params.ACTION == 'APPLY' } }
       steps {
@@ -101,6 +163,10 @@ PY
           ]) {
             sh '''
               "$WORKSPACE/.tools/terraform" init -input=false
+              "$WORKSPACE/.tools/terraform" apply -input=false -auto-approve \
+                -target=module.ecr.aws_ecr_repository.this \
+                -var="aws_region=${AWS_REGION}" \
+                -var="cluster_name=${CLUSTER_NAME}"
             '''
           }
         }
@@ -116,7 +182,7 @@ PY
               string(credentialsId: env.AWS_ACCESS_KEY_CREDENTIAL_ID, variable: 'AWS_ACCESS_KEY_ID'),
               string(credentialsId: env.AWS_SECRET_KEY_CREDENTIAL_ID, variable: 'AWS_SECRET_ACCESS_KEY')
             ]) {
-              env.ECR_REGISTRY = sh(script: 'aws sts get-caller-identity --query Account --output text', returnStdout: true).trim() + ".dkr.ecr.${AWS_REGION}.amazonaws.com"
+              env.ECR_REGISTRY = sh(script: '"$WORKSPACE/.tools/aws" sts get-caller-identity --query Account --output text', returnStdout: true).trim() + ".dkr.ecr.${AWS_REGION}.amazonaws.com"
             }
             env.IMAGE_URI = "${env.ECR_REGISTRY}/${env.ECR_REPOSITORY}:${env.BUILD_NUMBER}"
           } else {
@@ -136,7 +202,7 @@ PY
               string(credentialsId: env.AWS_ACCESS_KEY_CREDENTIAL_ID, variable: 'AWS_ACCESS_KEY_ID'),
               string(credentialsId: env.AWS_SECRET_KEY_CREDENTIAL_ID, variable: 'AWS_SECRET_ACCESS_KEY')
             ]) {
-              sh 'aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin ${ECR_REGISTRY}'
+              sh '"$WORKSPACE/.tools/aws" ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin ${ECR_REGISTRY}'
             }
           } else {
             withCredentials([usernamePassword(credentialsId: env.DOCKERHUB_CREDENTIALS_ID, usernameVariable: 'DOCKERHUB_USER', passwordVariable: 'DOCKERHUB_TOKEN')]) {
@@ -223,17 +289,17 @@ PY
         withCredentials([string(credentialsId: env.POSTGRES_CREDENTIALS_ID, variable: 'POSTGRES_PASSWORD')]) {
           sh '''
             set +x
-            aws eks update-kubeconfig --region "${AWS_REGION}" --name "${CLUSTER_NAME}"
-            kubectl apply -f k8s/namespace.yaml
-            kubectl apply -f k8s/configmap.yaml
-            kubectl create secret generic admission-secrets --namespace "${K8S_NAMESPACE}" \\
+            "$WORKSPACE/.tools/aws" eks update-kubeconfig --region "${AWS_REGION}" --name "${CLUSTER_NAME}"
+            "$WORKSPACE/.tools/kubectl" apply -f k8s/namespace.yaml
+            "$WORKSPACE/.tools/kubectl" apply -f k8s/configmap.yaml
+            "$WORKSPACE/.tools/kubectl" create secret generic admission-secrets --namespace "${K8S_NAMESPACE}" \\
               --from-literal=POSTGRES_PASSWORD="${POSTGRES_PASSWORD}" \\
               --from-literal=DATABASE_URL="postgresql://admission:${POSTGRES_PASSWORD}@postgres:5432/admission" \\
-              --dry-run=client -o yaml | kubectl apply -f -
-            kubectl apply -f k8s/postgres.yaml
-            kubectl apply -f k8s/deployment.yaml
-            kubectl apply -f k8s/service.yaml
-            kubectl -n "${K8S_NAMESPACE}" set image deployment/admission-web admission-web="${IMAGE_URI}"
+              --dry-run=client -o yaml | "$WORKSPACE/.tools/kubectl" apply -f -
+            "$WORKSPACE/.tools/kubectl" apply -f k8s/postgres.yaml
+            "$WORKSPACE/.tools/kubectl" apply -f k8s/deployment.yaml
+            "$WORKSPACE/.tools/kubectl" apply -f k8s/service.yaml
+            "$WORKSPACE/.tools/kubectl" -n "${K8S_NAMESPACE}" set image deployment/admission-web admission-web="${IMAGE_URI}"
           '''
         }
       }
@@ -242,9 +308,9 @@ PY
     stage('Verify Deployment') {
       when { expression { params.ACTION == 'APPLY' } }
       steps {
-        sh 'kubectl -n ${K8S_NAMESPACE} rollout status deployment/postgres --timeout=180s'
-        sh 'kubectl -n ${K8S_NAMESPACE} rollout status deployment/admission-web --timeout=180s'
-        sh 'kubectl -n ${K8S_NAMESPACE} get pods,service admission-web'
+        sh '"$WORKSPACE/.tools/kubectl" -n ${K8S_NAMESPACE} rollout status deployment/postgres --timeout=180s'
+        sh '"$WORKSPACE/.tools/kubectl" -n ${K8S_NAMESPACE} rollout status deployment/admission-web --timeout=180s'
+        sh '"$WORKSPACE/.tools/kubectl" -n ${K8S_NAMESPACE} get pods,service admission-web'
       }
     }
   }
