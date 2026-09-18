@@ -18,7 +18,6 @@ pipeline {
   environment {
     AWS_REGION = 'us-east-1'
     TERRAFORM_VERSION = '1.10.5'
-    PATH+TOOLS = "${WORKSPACE}/.tools"
     CLUSTER_NAME = 'admission-eks'
     ECR_REPOSITORY = 'admission-api'
     IMAGE_NAME = 'admission-api'
@@ -40,7 +39,9 @@ pipeline {
         sh '''
           set -eu
           mkdir -p "$WORKSPACE/.tools"
-          if ! command -v terraform >/dev/null 2>&1; then
+          if command -v terraform >/dev/null 2>&1; then
+            ln -sf "$(command -v terraform)" "$WORKSPACE/.tools/terraform"
+          else
             python3 - "$WORKSPACE/.tools" "$TERRAFORM_VERSION" <<'PY'
 import sys
 import urllib.request
@@ -58,7 +59,7 @@ archive.unlink()
 (tools_dir / "terraform").chmod(0o755)
 PY
           fi
-          terraform version
+          "$WORKSPACE/.tools/terraform" version
         '''
       }
     }
@@ -88,7 +89,7 @@ PY
             string(credentialsId: env.AWS_ACCESS_KEY_CREDENTIAL_ID, variable: 'AWS_ACCESS_KEY_ID'),
             string(credentialsId: env.AWS_SECRET_KEY_CREDENTIAL_ID, variable: 'AWS_SECRET_ACCESS_KEY')
           ]) {
-            sh 'terraform init -input=false && terraform apply -input=false -auto-approve -target=module.ecr.aws_ecr_repository.this -var="aws_region=${AWS_REGION}" -var="cluster_name=${CLUSTER_NAME}"'
+            sh '"$WORKSPACE/.tools/terraform" init -input=false && "$WORKSPACE/.tools/terraform" apply -input=false -auto-approve -target=module.ecr.aws_ecr_repository.this -var="aws_region=${AWS_REGION}" -var="cluster_name=${CLUSTER_NAME}"'
           }
         }
       }
@@ -146,7 +147,7 @@ PY
             string(credentialsId: env.AWS_ACCESS_KEY_CREDENTIAL_ID, variable: 'AWS_ACCESS_KEY_ID'),
             string(credentialsId: env.AWS_SECRET_KEY_CREDENTIAL_ID, variable: 'AWS_SECRET_ACCESS_KEY')
           ]) {
-            sh 'terraform init -input=false'
+            sh '"$WORKSPACE/.tools/terraform" init -input=false'
           }
         }
       }
@@ -160,7 +161,7 @@ PY
             string(credentialsId: env.AWS_ACCESS_KEY_CREDENTIAL_ID, variable: 'AWS_ACCESS_KEY_ID'),
             string(credentialsId: env.AWS_SECRET_KEY_CREDENTIAL_ID, variable: 'AWS_SECRET_ACCESS_KEY')
           ]) {
-            sh 'terraform plan -input=false -out=tfplan -var="aws_region=${AWS_REGION}" -var="cluster_name=${CLUSTER_NAME}"'
+            sh '"$WORKSPACE/.tools/terraform" plan -input=false -out=tfplan -var="aws_region=${AWS_REGION}" -var="cluster_name=${CLUSTER_NAME}"'
           }
         }
       }
@@ -179,7 +180,7 @@ PY
             string(credentialsId: env.AWS_ACCESS_KEY_CREDENTIAL_ID, variable: 'AWS_ACCESS_KEY_ID'),
             string(credentialsId: env.AWS_SECRET_KEY_CREDENTIAL_ID, variable: 'AWS_SECRET_ACCESS_KEY')
           ]) {
-            sh 'terraform apply -input=false -auto-approve tfplan'
+            sh '"$WORKSPACE/.tools/terraform" apply -input=false -auto-approve tfplan'
           }
         }
       }
@@ -198,7 +199,7 @@ PY
             string(credentialsId: env.AWS_ACCESS_KEY_CREDENTIAL_ID, variable: 'AWS_ACCESS_KEY_ID'),
             string(credentialsId: env.AWS_SECRET_KEY_CREDENTIAL_ID, variable: 'AWS_SECRET_ACCESS_KEY')
           ]) {
-            sh 'terraform destroy -input=false -auto-approve -var="aws_region=${AWS_REGION}" -var="cluster_name=${CLUSTER_NAME}"'
+            sh '"$WORKSPACE/.tools/terraform" destroy -input=false -auto-approve -var="aws_region=${AWS_REGION}" -var="cluster_name=${CLUSTER_NAME}"'
           }
         }
       }
