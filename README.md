@@ -115,7 +115,7 @@ For a private Docker Hub repository, create an `imagePullSecret` in the `product
 
 ## 8. Kubernetes
 
-The deployment uses the configurable namespace name `production`, two Flask replicas, readiness/liveness probes, resource requests, a LoadBalancer Service, and a persistent volume for the practice PostgreSQL database. `k8s/secret.yaml` is an example only and is not applied by Jenkins. Jenkins creates the secret from the Jenkins string credential named `POSTGRES_PASSWORD`.
+The deployment uses the configurable namespace name `production`, two Flask replicas, readiness/liveness probes, resource requests, a LoadBalancer Service, and an `emptyDir` volume for the practice PostgreSQL database. This storage is intentionally simple and data is lost when the PostgreSQL pod is replaced. `k8s/secret.yaml` is an example only and is not applied by Jenkins. Jenkins creates the secret from the Jenkins string credential named `POSTGRES_PASSWORD`.
 
 Jenkins applies the manifests, then runs `kubectl set image` with the exact ECR or Docker Hub image. Retrieve the external address with:
 

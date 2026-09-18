@@ -337,7 +337,12 @@ PY
           sh '''
             set -eu
             export PATH="$WORKSPACE/.tools:$PATH"
-            "$WORKSPACE/.tools/kubectl" -n "${K8S_NAMESPACE}" rollout status deployment/postgres --timeout=180s
+            if ! "$WORKSPACE/.tools/kubectl" -n "${K8S_NAMESPACE}" rollout status deployment/postgres --timeout=180s; then
+              "$WORKSPACE/.tools/kubectl" -n "${K8S_NAMESPACE}" get pods,pvc,events --sort-by=.lastTimestamp || true
+              "$WORKSPACE/.tools/kubectl" -n "${K8S_NAMESPACE}" describe deployment/postgres || true
+              "$WORKSPACE/.tools/kubectl" -n "${K8S_NAMESPACE}" logs deployment/postgres --all-containers=true --tail=100 || true
+              exit 1
+            fi
             "$WORKSPACE/.tools/kubectl" -n "${K8S_NAMESPACE}" rollout status deployment/admission-web --timeout=180s
             "$WORKSPACE/.tools/kubectl" -n "${K8S_NAMESPACE}" get pods,service admission-web
           '''
