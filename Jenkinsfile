@@ -97,7 +97,9 @@ archive.unlink()
 archive_root = tools_dir / "aws-cli-archive" / "aws"
 archive_root.rename(install_dir)
 (tools_dir / "aws").unlink(missing_ok=True)
-(tools_dir / "aws").symlink_to(install_dir / "dist" / "aws")
+aws_binary = install_dir / "dist" / "aws"
+aws_binary.chmod(0o755)
+(tools_dir / "aws").symlink_to(aws_binary)
 PY
           fi
 
@@ -120,6 +122,7 @@ target.chmod(0o755)
 PY
           fi
 
+          chmod 755 "$WORKSPACE/.tools/aws" "$WORKSPACE/.tools/kubectl"
           "$WORKSPACE/.tools/aws" --version
           "$WORKSPACE/.tools/kubectl" version --client
         '''
