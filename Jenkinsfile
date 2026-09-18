@@ -344,7 +344,8 @@ PY
               exit 1
             fi
             "$WORKSPACE/.tools/kubectl" -n "${K8S_NAMESPACE}" rollout status deployment/admission-web --timeout=180s
-            "$WORKSPACE/.tools/kubectl" -n "${K8S_NAMESPACE}" get pods,service admission-web
+            "$WORKSPACE/.tools/kubectl" -n "${K8S_NAMESPACE}" get pods -l app=admission-web -o wide
+            "$WORKSPACE/.tools/kubectl" -n "${K8S_NAMESPACE}" get service admission-web
           '''
         }
       }
