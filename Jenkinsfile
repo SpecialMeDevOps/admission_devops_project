@@ -20,9 +20,10 @@ pipeline {
     CLUSTER_NAME = 'admission-eks'
     ECR_REPOSITORY = 'admission-api'
     IMAGE_NAME = 'admission-api'
-    AWS_CREDENTIALS_ID = 'aws-credentials'
-    DOCKERHUB_CREDENTIALS_ID = 'dockerhub-credentials'
-    POSTGRES_CREDENTIALS_ID = 'postgres-password'
+    AWS_ACCESS_KEY_CREDENTIAL_ID = 'aws-access-key-id'
+    AWS_SECRET_KEY_CREDENTIAL_ID = 'aws-secret-access-key'
+    DOCKERHUB_CREDENTIALS_ID = 'dockerhub-creds'
+    POSTGRES_CREDENTIALS_ID = 'POSTGRES_PASSWORD'
     TERRAFORM_DIR = 'terraform'
     K8S_NAMESPACE = 'production'
   }
@@ -53,7 +54,10 @@ pipeline {
       when { expression { params.ACTION == 'APPLY' && params.REGISTRY == 'ECR' } }
       steps {
         dir(env.TERRAFORM_DIR) {
-          withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: env.AWS_CREDENTIALS_ID]]) {
+          withCredentials([
+            string(credentialsId: env.AWS_ACCESS_KEY_CREDENTIAL_ID, variable: 'AWS_ACCESS_KEY_ID'),
+            string(credentialsId: env.AWS_SECRET_KEY_CREDENTIAL_ID, variable: 'AWS_SECRET_ACCESS_KEY')
+          ]) {
             sh 'terraform init -input=false && terraform apply -input=false -auto-approve -target=module.ecr.aws_ecr_repository.this -var="aws_region=${AWS_REGION}" -var="cluster_name=${CLUSTER_NAME}"'
           }
         }
@@ -65,7 +69,10 @@ pipeline {
       steps {
         script {
           if (params.REGISTRY == 'ECR') {
-            withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: env.AWS_CREDENTIALS_ID]]) {
+            withCredentials([
+              string(credentialsId: env.AWS_ACCESS_KEY_CREDENTIAL_ID, variable: 'AWS_ACCESS_KEY_ID'),
+              string(credentialsId: env.AWS_SECRET_KEY_CREDENTIAL_ID, variable: 'AWS_SECRET_ACCESS_KEY')
+            ]) {
               env.ECR_REGISTRY = sh(script: 'aws sts get-caller-identity --query Account --output text', returnStdout: true).trim() + ".dkr.ecr.${AWS_REGION}.amazonaws.com"
             }
             env.IMAGE_URI = "${env.ECR_REGISTRY}/${env.ECR_REPOSITORY}:${env.BUILD_NUMBER}"
@@ -82,7 +89,10 @@ pipeline {
       steps {
         script {
           if (params.REGISTRY == 'ECR') {
-            withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: env.AWS_CREDENTIALS_ID]]) {
+            withCredentials([
+              string(credentialsId: env.AWS_ACCESS_KEY_CREDENTIAL_ID, variable: 'AWS_ACCESS_KEY_ID'),
+              string(credentialsId: env.AWS_SECRET_KEY_CREDENTIAL_ID, variable: 'AWS_SECRET_ACCESS_KEY')
+            ]) {
               sh 'aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin ${ECR_REGISTRY}'
             }
           } else {
@@ -102,7 +112,10 @@ pipeline {
     stage('Terraform Init') {
       steps {
         dir(env.TERRAFORM_DIR) {
-          withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: env.AWS_CREDENTIALS_ID]]) {
+          withCredentials([
+            string(credentialsId: env.AWS_ACCESS_KEY_CREDENTIAL_ID, variable: 'AWS_ACCESS_KEY_ID'),
+            string(credentialsId: env.AWS_SECRET_KEY_CREDENTIAL_ID, variable: 'AWS_SECRET_ACCESS_KEY')
+          ]) {
             sh 'terraform init -input=false'
           }
         }
@@ -113,7 +126,10 @@ pipeline {
       when { expression { params.ACTION == 'APPLY' } }
       steps {
         dir(env.TERRAFORM_DIR) {
-          withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: env.AWS_CREDENTIALS_ID]]) {
+          withCredentials([
+            string(credentialsId: env.AWS_ACCESS_KEY_CREDENTIAL_ID, variable: 'AWS_ACCESS_KEY_ID'),
+            string(credentialsId: env.AWS_SECRET_KEY_CREDENTIAL_ID, variable: 'AWS_SECRET_ACCESS_KEY')
+          ]) {
             sh 'terraform plan -input=false -out=tfplan -var="aws_region=${AWS_REGION}" -var="cluster_name=${CLUSTER_NAME}"'
           }
         }
@@ -129,7 +145,10 @@ pipeline {
           }
         }
         dir(env.TERRAFORM_DIR) {
-          withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: env.AWS_CREDENTIALS_ID]]) {
+          withCredentials([
+            string(credentialsId: env.AWS_ACCESS_KEY_CREDENTIAL_ID, variable: 'AWS_ACCESS_KEY_ID'),
+            string(credentialsId: env.AWS_SECRET_KEY_CREDENTIAL_ID, variable: 'AWS_SECRET_ACCESS_KEY')
+          ]) {
             sh 'terraform apply -input=false -auto-approve tfplan'
           }
         }
@@ -145,7 +164,10 @@ pipeline {
           }
         }
         dir(env.TERRAFORM_DIR) {
-          withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: env.AWS_CREDENTIALS_ID]]) {
+          withCredentials([
+            string(credentialsId: env.AWS_ACCESS_KEY_CREDENTIAL_ID, variable: 'AWS_ACCESS_KEY_ID'),
+            string(credentialsId: env.AWS_SECRET_KEY_CREDENTIAL_ID, variable: 'AWS_SECRET_ACCESS_KEY')
+          ]) {
             sh 'terraform destroy -input=false -auto-approve -var="aws_region=${AWS_REGION}" -var="cluster_name=${CLUSTER_NAME}"'
           }
         }

@@ -115,7 +115,7 @@ For a private Docker Hub repository, create an `imagePullSecret` in the `product
 
 ## 8. Kubernetes
 
-The deployment uses the configurable namespace name `production`, two Flask replicas, readiness/liveness probes, resource requests, a LoadBalancer Service, and a persistent volume for the practice PostgreSQL database. `k8s/secret.yaml` is an example only and is not applied by Jenkins. Jenkins creates the secret from a Jenkins string credential named `postgres-password`.
+The deployment uses the configurable namespace name `production`, two Flask replicas, readiness/liveness probes, resource requests, a LoadBalancer Service, and a persistent volume for the practice PostgreSQL database. `k8s/secret.yaml` is an example only and is not applied by Jenkins. Jenkins creates the secret from the Jenkins string credential named `POSTGRES_PASSWORD`.
 
 Jenkins applies the manifests, then runs `kubectl set image` with the exact ECR or Docker Hub image. Retrieve the external address with:
 
@@ -134,9 +134,10 @@ Create these credentials in Jenkins:
 
 | ID | Type | Purpose |
 |---|---|---|
-| `aws-credentials` | AWS access key or IAM-backed credential | Terraform, ECR, EKS |
-| `dockerhub-credentials` | Username with Docker Hub access token as password | Docker Hub option |
-| `postgres-password` | Secret text | Creates the Kubernetes PostgreSQL secret |
+| `aws-access-key-id` | Secret text containing AWS access key ID | Terraform, ECR, EKS |
+| `aws-secret-access-key` | Secret text containing AWS secret access key | Terraform, ECR, EKS |
+| `dockerhub-creds` | Username with Docker Hub access token as password | Docker Hub option |
+| `POSTGRES_PASSWORD` | Secret text | Creates the Kubernetes PostgreSQL secret |
 | GitHub credential if required | SSH key or token | Private repository checkout |
 
 Use an IAM role on the Jenkins host/agent when possible instead of long-lived AWS keys. The Jenkinsfile keeps credential IDs visible as configuration but never contains secret values.
