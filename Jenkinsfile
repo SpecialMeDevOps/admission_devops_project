@@ -1,0 +1,190 @@
+pipeline {
+  agent any
+
+  options {
+    timestamps()
+    skipDefaultCheckout(true)
+    disableConcurrentBuilds()
+  }
+
+  parameters {
+    choice(name: 'REGISTRY', choices: ['ECR', 'DOCKER_HUB'], description: 'Where the image will be pushed.')
+    choice(name: 'ACTION', choices: ['APPLY', 'DESTROY'], description: 'Apply the stack or destroy it.')
+    choice(name: 'RESOURCE_MODE', choices: ['USE_EXISTING', 'RECREATE'], description: 'USE_EXISTING keeps Terraform state and applies only changes. RECREATE requires confirmation.')
+    booleanParam(name: 'CONFIRM_DESTRUCTIVE', defaultValue: false, description: 'Required for DESTROY or RECREATE.')
+    string(name: 'DOCKERHUB_REPOSITORY', defaultValue: 'your-dockerhub-user/admission-api', description: 'Docker Hub repository, used only when DOCKER_HUB is selected.')
+  }
+
+  environment {
+    AWS_REGION = 'us-east-1'
+    CLUSTER_NAME = 'admission-eks'
+    ECR_REPOSITORY = 'admission-api'
+    IMAGE_NAME = 'admission-api'
+    AWS_CREDENTIALS_ID = 'aws-credentials'
+    DOCKERHUB_CREDENTIALS_ID = 'dockerhub-credentials'
+    POSTGRES_CREDENTIALS_ID = 'postgres-password'
+    TERRAFORM_DIR = 'terraform'
+    K8S_NAMESPACE = 'production'
+  }
+
+  stages {
+    stage('Checkout') {
+      steps { checkout scm }
+    }
+
+    stage('Install Dependencies') {
+      when { expression { params.ACTION == 'APPLY' } }
+      steps {
+        sh 'python3 -m venv .venv && . .venv/bin/activate && pip install --upgrade pip && pip install -r app/backend/requirements.txt'
+      }
+    }
+
+    stage('Test') {
+      when { expression { params.ACTION == 'APPLY' } }
+      steps { sh '. .venv/bin/activate && pytest -q' }
+    }
+
+    stage('Docker Build') {
+      when { expression { params.ACTION == 'APPLY' } }
+      steps { sh 'docker build --tag ${IMAGE_NAME}:${BUILD_NUMBER} .' }
+    }
+
+    stage('Terraform ECR Bootstrap') {
+      when { expression { params.ACTION == 'APPLY' && params.REGISTRY == 'ECR' } }
+      steps {
+        dir(env.TERRAFORM_DIR) {
+          withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: env.AWS_CREDENTIALS_ID]]) {
+            sh 'terraform init -input=false && terraform apply -input=false -auto-approve -target=module.ecr.aws_ecr_repository.this -var="aws_region=${AWS_REGION}" -var="cluster_name=${CLUSTER_NAME}"'
+          }
+        }
+      }
+    }
+
+    stage('Docker Image Tag') {
+      when { expression { params.ACTION == 'APPLY' } }
+      steps {
+        script {
+          if (params.REGISTRY == 'ECR') {
+            withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: env.AWS_CREDENTIALS_ID]]) {
+              env.ECR_REGISTRY = sh(script: 'aws sts get-caller-identity --query Account --output text', returnStdout: true).trim() + ".dkr.ecr.${AWS_REGION}.amazonaws.com"
+            }
+            env.IMAGE_URI = "${env.ECR_REGISTRY}/${env.ECR_REPOSITORY}:${env.BUILD_NUMBER}"
+          } else {
+            env.IMAGE_URI = "${params.DOCKERHUB_REPOSITORY}:${env.BUILD_NUMBER}"
+          }
+          sh 'docker tag ${IMAGE_NAME}:${BUILD_NUMBER} ${IMAGE_URI}'
+        }
+      }
+    }
+
+    stage('Login to Registry') {
+      when { expression { params.ACTION == 'APPLY' } }
+      steps {
+        script {
+          if (params.REGISTRY == 'ECR') {
+            withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: env.AWS_CREDENTIALS_ID]]) {
+              sh 'aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin ${ECR_REGISTRY}'
+            }
+          } else {
+            withCredentials([usernamePassword(credentialsId: env.DOCKERHUB_CREDENTIALS_ID, usernameVariable: 'DOCKERHUB_USER', passwordVariable: 'DOCKERHUB_TOKEN')]) {
+              sh 'echo "${DOCKERHUB_TOKEN}" | docker login --username "${DOCKERHUB_USER}" --password-stdin'
+            }
+          }
+        }
+      }
+    }
+
+    stage('Push Docker Image') {
+      when { expression { params.ACTION == 'APPLY' } }
+      steps { sh 'docker push ${IMAGE_URI}' }
+    }
+
+    stage('Terraform Init') {
+      steps {
+        dir(env.TERRAFORM_DIR) {
+          withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: env.AWS_CREDENTIALS_ID]]) {
+            sh 'terraform init -input=false'
+          }
+        }
+      }
+    }
+
+    stage('Terraform Plan') {
+      when { expression { params.ACTION == 'APPLY' } }
+      steps {
+        dir(env.TERRAFORM_DIR) {
+          withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: env.AWS_CREDENTIALS_ID]]) {
+            sh 'terraform plan -input=false -out=tfplan -var="aws_region=${AWS_REGION}" -var="cluster_name=${CLUSTER_NAME}"'
+          }
+        }
+      }
+    }
+
+    stage('Terraform Apply') {
+      when { expression { params.ACTION == 'APPLY' } }
+      steps {
+        script {
+          if (params.RESOURCE_MODE == 'RECREATE' && !params.CONFIRM_DESTRUCTIVE) {
+            error('RECREATE requires CONFIRM_DESTRUCTIVE=true. Review the Terraform plan first.')
+          }
+        }
+        dir(env.TERRAFORM_DIR) {
+          withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: env.AWS_CREDENTIALS_ID]]) {
+            sh 'terraform apply -input=false -auto-approve tfplan'
+          }
+        }
+      }
+    }
+
+    stage('Terraform Destroy') {
+      when { expression { params.ACTION == 'DESTROY' } }
+      steps {
+        script {
+          if (!params.CONFIRM_DESTRUCTIVE) {
+            error('DESTROY requires CONFIRM_DESTRUCTIVE=true. Re-run only after reviewing the target workspace and state.')
+          }
+        }
+        dir(env.TERRAFORM_DIR) {
+          withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: env.AWS_CREDENTIALS_ID]]) {
+            sh 'terraform destroy -input=false -auto-approve -var="aws_region=${AWS_REGION}" -var="cluster_name=${CLUSTER_NAME}"'
+          }
+        }
+      }
+    }
+
+    stage('Kubernetes Deployment') {
+      when { expression { params.ACTION == 'APPLY' } }
+      steps {
+        withCredentials([string(credentialsId: env.POSTGRES_CREDENTIALS_ID, variable: 'POSTGRES_PASSWORD')]) {
+          sh '''
+            set +x
+            aws eks update-kubeconfig --region "${AWS_REGION}" --name "${CLUSTER_NAME}"
+            kubectl apply -f k8s/namespace.yaml
+            kubectl apply -f k8s/configmap.yaml
+            kubectl create secret generic admission-secrets --namespace "${K8S_NAMESPACE}" \\
+              --from-literal=POSTGRES_PASSWORD="${POSTGRES_PASSWORD}" \\
+              --from-literal=DATABASE_URL="postgresql://admission:${POSTGRES_PASSWORD}@postgres:5432/admission" \\
+              --dry-run=client -o yaml | kubectl apply -f -
+            kubectl apply -f k8s/postgres.yaml
+            kubectl apply -f k8s/deployment.yaml
+            kubectl apply -f k8s/service.yaml
+            kubectl -n "${K8S_NAMESPACE}" set image deployment/admission-web admission-web="${IMAGE_URI}"
+          '''
+        }
+      }
+    }
+
+    stage('Verify Deployment') {
+      when { expression { params.ACTION == 'APPLY' } }
+      steps {
+        sh 'kubectl -n ${K8S_NAMESPACE} rollout status deployment/postgres --timeout=180s'
+        sh 'kubectl -n ${K8S_NAMESPACE} rollout status deployment/admission-web --timeout=180s'
+        sh 'kubectl -n ${K8S_NAMESPACE} get pods,service admission-web'
+      }
+    }
+  }
+
+  post {
+    always { sh 'rm -rf .venv || true' }
+  }
+}

@@ -1,0 +1,25 @@
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&family=Space+Grotesk:wght@500;600;700&display=swap');
+
+:root { --ink: #17221f; --muted: #66736e; --paper: #f5f1e8; --panel: #fffdf8; --accent: #e06d3b; --line: #d9d5c9; }
+* { box-sizing: border-box; }
+body { margin: 0; min-height: 100vh; color: var(--ink); font-family: 'DM Sans', sans-serif; background: radial-gradient(circle at 90% 10%, #f2cdb8 0, transparent 28%), var(--paper); }
+.shell { display: grid; grid-template-columns: minmax(0, 1fr) minmax(360px, 0.8fr); gap: clamp(2rem, 8vw, 9rem); max-width: 1180px; min-height: 100vh; margin: auto; padding: clamp(2rem, 7vw, 7rem) clamp(1.25rem, 5vw, 5rem); align-items: center; }
+.intro { max-width: 590px; }
+.eyebrow { color: var(--accent); font-size: .75rem; font-weight: 700; letter-spacing: .14em; }
+h1, h2 { font-family: 'Space Grotesk', sans-serif; letter-spacing: 0; }
+h1 { max-width: 560px; margin: 1rem 0; font-size: clamp(3.5rem, 8vw, 7rem); line-height: .94; }
+h2 { margin: 0; font-size: 2rem; }
+.lead { max-width: 450px; color: var(--muted); font-size: 1.1rem; line-height: 1.6; }
+.trust { display: flex; gap: 1rem; align-items: center; margin-top: 5rem; border-top: 1px solid var(--line); padding-top: 1rem; color: var(--muted); }
+.trust span { color: var(--accent); font-family: 'Space Grotesk', sans-serif; font-weight: 700; }
+.form-panel { border-top: 5px solid var(--accent); padding: 2rem; background: var(--panel); box-shadow: 0 20px 60px #443b2415; }
+.muted, small { color: var(--muted); }
+form { display: grid; gap: .7rem; margin-top: 2rem; }
+label { margin-top: .65rem; font-weight: 700; }
+input { width: 100%; border: 1px solid var(--line); border-radius: 2px; padding: .9rem; background: #fff; color: var(--ink); font: inherit; }
+input:focus { outline: 3px solid #e06d3b44; border-color: var(--accent); }
+button { margin-top: 1rem; border: 0; border-radius: 2px; padding: 1rem 1.2rem; background: var(--ink); color: white; font: inherit; font-weight: 700; cursor: pointer; }
+button:hover { background: var(--accent); }
+#status { min-height: 1.4rem; margin: .5rem 0 0; font-weight: 700; }
+.success { color: #28734f; }.error { color: #b33d2e; }
+@media (max-width: 760px) { .shell { grid-template-columns: 1fr; padding-top: 3rem; } h1 { font-size: clamp(3.4rem, 17vw, 5rem); } .trust { margin-top: 2rem; } .form-panel { padding: 1.4rem; } }

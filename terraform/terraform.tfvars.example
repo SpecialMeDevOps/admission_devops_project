@@ -1,0 +1,7 @@
+aws_region         = "us-east-1"
+project_name       = "admission-platform"
+cluster_name       = "admission-eks"
+ecr_repository_name = "admission-api"
+
+# Keep secrets out of this file. AWS authentication comes from Jenkins credentials,
+# the AWS CLI environment, or an attached IAM role.

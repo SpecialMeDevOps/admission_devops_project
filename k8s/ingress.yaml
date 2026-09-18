@@ -1,0 +1,20 @@
+# Optional alternative to the LoadBalancer service. Install an ingress controller first.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: admission-web
+  namespace: production
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-body-size: 10m
+spec:
+  rules:
+    - host: admissions.example.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: admission-web
+                port:
+                  number: 80

@@ -1,0 +1,1 @@
+Jenkins is the deployment CI/CD system for this project, so GitHub Actions is intentionally not used for the main pipeline. This directory documents that choice while keeping the standard GitHub structure available for future checks such as Markdown linting or Terraform validation.

@@ -1,0 +1,60 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: admission-web
+  namespace: production
+  labels:
+    app: admission-web
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: admission-web
+  template:
+    metadata:
+      labels:
+        app: admission-web
+    spec:
+      containers:
+        - name: admission-web
+          image: admission-api:latest
+          imagePullPolicy: Always
+          ports:
+            - name: http
+              containerPort: 5000
+          env:
+            - name: UPLOAD_FOLDER
+              valueFrom:
+                configMapKeyRef:
+                  name: admission-config
+                  key: UPLOAD_FOLDER
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: admission-secrets
+                  key: DATABASE_URL
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 15
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 30
+            periodSeconds: 20
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          volumeMounts:
+            - name: uploads
+              mountPath: /app/uploads
+      volumes:
+        - name: uploads
+          emptyDir: {}
