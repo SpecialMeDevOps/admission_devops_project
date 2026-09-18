@@ -80,9 +80,9 @@ def get_connection(app):
     if is_sqlite(app):
         connection = sqlite3.connect(database_url.removeprefix("sqlite:///"))
     else:
-        import psycopg2
+        import psycopg
 
-        connection = psycopg2.connect(database_url)
+        connection = psycopg.connect(database_url)
     try:
         yield connection
     finally:
