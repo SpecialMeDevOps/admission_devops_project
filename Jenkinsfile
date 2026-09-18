@@ -82,14 +82,26 @@ PY
     }
 
     stage('Terraform ECR Bootstrap') {
-      when { expression { params.ACTION == 'APPLY' && params.REGISTRY == 'ECR' } }
+      when {
+        expression {
+          params.ACTION == 'APPLY' && params.REGISTRY == 'ECR'
+        }
+      }
       steps {
         dir(env.TERRAFORM_DIR) {
           withCredentials([
-            string(credentialsId: env.AWS_ACCESS_KEY_CREDENTIAL_ID, variable: 'AWS_ACCESS_KEY_ID'),
-            string(credentialsId: env.AWS_SECRET_KEY_CREDENTIAL_ID, variable: 'AWS_SECRET_ACCESS_KEY')
+            string(
+              credentialsId: env.AWS_ACCESS_KEY_CREDENTIAL_ID,
+              variable: 'AWS_ACCESS_KEY_ID'
+            ),
+            string(
+              credentialsId: env.AWS_SECRET_KEY_CREDENTIAL_ID,
+              variable: 'AWS_SECRET_ACCESS_KEY'
+            )
           ]) {
-            sh '"$WORKSPACE/.tools/terraform" init -input=false && "$WORKSPACE/.tools/terraform" apply -input=false -auto-approve -target=module.ecr.aws_ecr_repository.this -var="aws_region=${AWS_REGION}" -var="cluster_name=${CLUSTER_NAME}"'
+            sh '''
+              "$WORKSPACE/.tools/terraform" init -input=false
+            '''
           }
         }
       }
