@@ -324,9 +324,24 @@ PY
     stage('Verify Deployment') {
       when { expression { params.ACTION == 'APPLY' } }
       steps {
-        sh '"$WORKSPACE/.tools/kubectl" -n ${K8S_NAMESPACE} rollout status deployment/postgres --timeout=180s'
-        sh '"$WORKSPACE/.tools/kubectl" -n ${K8S_NAMESPACE} rollout status deployment/admission-web --timeout=180s'
-        sh '"$WORKSPACE/.tools/kubectl" -n ${K8S_NAMESPACE} get pods,service admission-web'
+        withCredentials([
+          string(
+            credentialsId: env.AWS_ACCESS_KEY_CREDENTIAL_ID,
+            variable: 'AWS_ACCESS_KEY_ID'
+          ),
+          string(
+            credentialsId: env.AWS_SECRET_KEY_CREDENTIAL_ID,
+            variable: 'AWS_SECRET_ACCESS_KEY'
+          )
+        ]) {
+          sh '''
+            set -eu
+            export PATH="$WORKSPACE/.tools:$PATH"
+            "$WORKSPACE/.tools/kubectl" -n "${K8S_NAMESPACE}" rollout status deployment/postgres --timeout=180s
+            "$WORKSPACE/.tools/kubectl" -n "${K8S_NAMESPACE}" rollout status deployment/admission-web --timeout=180s
+            "$WORKSPACE/.tools/kubectl" -n "${K8S_NAMESPACE}" get pods,service admission-web
+          '''
+        }
       }
     }
   }
