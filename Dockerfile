@@ -4,6 +4,8 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PORT=5000
 
+    
+
 WORKDIR /app
 COPY app/backend/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
