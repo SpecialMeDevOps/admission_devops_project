@@ -289,7 +289,20 @@ PY
     stage('Kubernetes Deployment') {
       when { expression { params.ACTION == 'APPLY' } }
       steps {
-        withCredentials([string(credentialsId: env.POSTGRES_CREDENTIALS_ID, variable: 'POSTGRES_PASSWORD')]) {
+        withCredentials([
+          string(
+            credentialsId: env.AWS_ACCESS_KEY_CREDENTIAL_ID,
+            variable: 'AWS_ACCESS_KEY_ID'
+          ),
+          string(
+            credentialsId: env.AWS_SECRET_KEY_CREDENTIAL_ID,
+            variable: 'AWS_SECRET_ACCESS_KEY'
+          ),
+          string(
+            credentialsId: env.POSTGRES_CREDENTIALS_ID,
+            variable: 'POSTGRES_PASSWORD'
+          )
+        ]) {
           sh '''
             set +x
             "$WORKSPACE/.tools/aws" eks update-kubeconfig --region "${AWS_REGION}" --name "${CLUSTER_NAME}"
